@@ -4,29 +4,35 @@ from ultralytics import YOLO
 import os
 import time
 import re
+import shutil
+import json
+from datetime import datetime
 
-# --- CONFIGURATION ---
-WATCH_FOLDER = r"C:\Users\ijhuigiytr\Desktop\Pi Image Transfer\received_images"
-MODEL_NAME = "license_plate_detector.pt"
+# Import your settings
+import config
 
-# Standard alphanumerics are enough for DK, PL, and DE plates.
-# (Even if a German plate has an 'Ö', it is usually read as 'O' or requires complex training)
-ALLOWED_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZÆØÅ0123456789'
-
-processed_files = {}
+# Ensure output directories exist
+os.makedirs(config.PROCESSED_FOLDER, exist_ok=True)
 
 def initialize_model():
     print(f"Loading Models...")
-    model = YOLO(MODEL_NAME)
-    # Using 'en' is best for plates. We don't need 'pl' or 'de' language dictionaries 
-    # because license plates are random codes, not dictionary words.
+    model = YOLO(config.MODEL_NAME)
     reader = easyocr.Reader(['en'], gpu=True) 
-    print("Waiting for images...")
+    print(f"Watching: {config.WATCH_FOLDER}")
     return model, reader
 
-def get_file_timestamp(filepath):
-    try: return os.path.getmtime(filepath)
-    except OSError: return 0
+def log_to_json(plate_text):
+    data = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "plate_number": plate_text,
+        "status": "detected"
+    }
+    try:
+        with open(config.LOG_FILE, mode='a', encoding='utf-8') as f:
+            f.write(json.dumps(data) + "\n")
+        print(f"📝 Logged: {plate_text}")
+    except Exception as e:
+        print(f"❌ Error logging: {e}")
 
 def wait_for_write_finish(filepath):
     last_size = -1
@@ -40,106 +46,121 @@ def wait_for_write_finish(filepath):
     return False
 
 def preprocess_for_ocr(img):
-    """
-    Simple cleaning: Zoom in 2x, Greyscale, and add a white border.
-    """
-    # 1. Resize (Zoom in 2x)
-    img = cv2.resize(img, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+    h, w = img.shape[:2]
     
-    # 2. Greyscale
+    # Use settings from config
+    crop_x = int(w * config.CROP_X_PERCENT) 
+    crop_y = int(h * config.CROP_Y_PERCENT)
+    img = img[crop_y:h-crop_y, crop_x:w-crop_x]
+
+    img = cv2.resize(img, None, fx=config.RESIZE_SCALE, fy=config.RESIZE_SCALE, interpolation=cv2.INTER_CUBIC)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
-    # 3. Add White Border (Padding) 
-    # This prevents the first/last letter from touching the edge
-    return cv2.copyMakeBorder(gray, 30, 30, 30, 30, cv2.BORDER_CONSTANT, value=255)
+    return cv2.copyMakeBorder(
+        gray, 
+        config.PADDING_SIZE, config.PADDING_SIZE, config.PADDING_SIZE, config.PADDING_SIZE, 
+        cv2.BORDER_CONSTANT, value=255
+    )
 
-def process_image(model, reader, filepath):
-    img = cv2.imread(filepath)
+def clean_plate_text(text):
+    """
+    Intelligent cleaning for 8-char errors on 7-char plates.
+    """
+    text = re.sub(r'[^A-Z0-9]', '', text)
+    danish_pattern = r'^[A-Z]{2}[0-9]{5}$'
+
+    if len(text) == 7: return text
+
+    if len(text) == 8:
+        # Phantom '1' on RIGHT
+        if text[-1] in ['1', 'I'] and re.match(danish_pattern, text[:-1]):
+            return text[:-1]
+        # Phantom 'L' on LEFT
+        if re.match(danish_pattern, text[1:]):
+            return text[1:]
+
+    return text
+
+def process_image(model, reader, full_path, filename):
+    img = cv2.imread(full_path)
     if img is None: return
 
-    # YOLO Detect
     results = model.predict(source=img, conf=0.25, verbose=False)
-    
     found_plate = False
+    detected_text_for_log = None
+
     for result in results:
         for box in result.boxes:
-            found_plate = True
             x1, y1, x2, y2 = map(int, box.xyxy[0])
-            
-            # Crop Plate
             plate_crop = img[y1:y2, x1:x2]
-            
-            # Clean Plate
             clean_plate = preprocess_for_ocr(plate_crop)
 
-            # Read Plate
-            ocr_result = reader.readtext(
-                clean_plate, 
-                allowlist=ALLOWED_CHARS,
-                paragraph=False # Keep this False so it sees spaces
-            )
+            ocr_result = reader.readtext(clean_plate, allowlist=config.ALLOWED_CHARS, paragraph=False)
+            if not ocr_result: continue
 
-            # --- STITCHING LOGIC (The Secret Sauce) ---
-            # 1. Filter out low confidence junk (< 0.4)
-            valid_parts = [res for res in ocr_result if res[2] > 0.4]
+            # Height Filter
+            max_height = 0
+            valid_parts = []
+            for res in ocr_result:
+                if res[2] > config.MIN_CONFIDENCE:
+                    box = res[0]
+                    height = box[2][1] - box[0][1]
+                    if height > max_height: max_height = height
+                    valid_parts.append((res, height))
 
-            # 2. Sort parts from Left to Right (by X coordinate)
-            # This ensures "B" then "MW" then "123" come in order
-            valid_parts.sort(key=lambda x: x[0][0][0])
+            final_parts = []
+            for res, height in valid_parts:
+                if height > (max_height * config.HEIGHT_RATIO_FILTER):
+                    final_parts.append(res)
 
-            # 3. Join them together
-            detected_text = "".join([part[1] for part in valid_parts])
-            
-            # 4. Clean (Remove anything that isn't A-Z or 0-9)
-            detected_text = re.sub(r'[^A-Z0-9]', '', detected_text)
+            final_parts.sort(key=lambda x: x[0][0][0])
+            detected_text = "".join([part[1] for part in final_parts])
+            final_text = clean_plate_text(detected_text)
 
-            # Length Check: 
-            # DK = 7 chars, PL = 7-8 chars, DE = 5-8 chars
-            if 5 <= len(detected_text) <= 9:
-                print(f"✅ PLATE: {detected_text}")
+            if 5 <= len(final_text) <= 9:
+                print(f"✅ PLATE: {final_text}")
+                detected_text_for_log = final_text
+                found_plate = True
                 
-                # Draw
                 cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
-                cv2.putText(img, detected_text, (x1, y1 - 10), 
+                cv2.putText(img, final_text, (x1, y1 - 10), 
                             cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
-                
-                # Show the cropped plate to see what OCR saw
-                cv2.imshow("Plate Crop", clean_plate)
-            else:
-                print(f"⚠️  Skipped (Text: {detected_text})")
+                cv2.imshow("Debug: Plate View", clean_plate)
 
     if found_plate:
-        # Resize large images for display
+        log_to_json(detected_text_for_log)
         if img.shape[1] > 1000:
             scale = 1000 / img.shape[1]
             img = cv2.resize(img, (0,0), fx=scale, fy=scale)
         cv2.imshow("Live Feed", img)
-        cv2.waitKey(2000)
+        cv2.waitKey(2000) 
     else:
-        print("No plates found.")
+        print(f"❌ No clear plate found in {filename}")
+
+    try:
+        shutil.move(full_path, os.path.join(config.PROCESSED_FOLDER, filename))
+        print(f"📂 Moved to processed folder.\n")
+    except Exception as e:
+        print(f"⚠️ Could not move file: {e}")
+
+# ... (imports remain the same) ...
 
 def main():
     model, reader = initialize_model()
     
-    # Load existing files so we don't re-process them
-    for f in os.listdir(WATCH_FOLDER):
-        processed_files[f] = get_file_timestamp(os.path.join(WATCH_FOLDER, f))
-
-    print(f"Watching: {WATCH_FOLDER}")
-
     while True:
         try:
-            for filename in os.listdir(WATCH_FOLDER):
-                if not filename.lower().endswith(('.jpg', '.png', '.jpeg')): continue
-                
-                full_path = os.path.join(WATCH_FOLDER, filename)
-                t_stamp = get_file_timestamp(full_path)
-                
-                if filename not in processed_files or t_stamp != processed_files[filename]:
-                    print(f"\n📥 NEW: {filename}")
-                    if wait_for_write_finish(full_path):
-                        processed_files[filename] = t_stamp
-                        process_image(model, reader, full_path)
+            # --- CHANGE IS HERE ---
+            # We now use the list from config.py
+            files = [f for f in os.listdir(config.WATCH_FOLDER) if f.lower().endswith(config.VALID_EXTENSIONS)]
+            
+            for filename in files:
+                full_path = os.path.join(config.WATCH_FOLDER, filename)
+                print(f"\n📥 Processing: {filename}")
+                if wait_for_write_finish(full_path):
+                    process_image(model, reader, full_path, filename)
+                else:
+                    print("Timeout waiting for file.")
 
             if cv2.waitKey(10) & 0xFF == ord('q'): break
             time.sleep(0.5)
