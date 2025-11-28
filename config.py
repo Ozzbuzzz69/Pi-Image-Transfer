@@ -25,3 +25,8 @@ PADDING_SIZE = 30
 # --- FILTERING ---
 MIN_CONFIDENCE = 0.3         
 HEIGHT_RATIO_FILTER = 0.6
+
+# --- DISPLAY SETTINGS ---
+# Set to True if you want to see the windows (Debugging)
+# Set to False if you want it to run silently in the background (Production)
+SHOW_GUI = True

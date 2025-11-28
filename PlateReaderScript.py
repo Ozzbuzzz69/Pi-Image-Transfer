@@ -122,18 +122,23 @@ def process_image(model, reader, full_path, filename):
                 detected_text_for_log = final_text
                 found_plate = True
                 
-                cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
-                cv2.putText(img, final_text, (x1, y1 - 10), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
-                cv2.imshow("Debug: Plate View", clean_plate)
+                # --- ONLY SHOW GUI IF CONFIG SAYS SO ---
+                if config.SHOW_GUI:
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+                    cv2.putText(img, final_text, (x1, y1 - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
+                    cv2.imshow("Debug: Plate View", clean_plate)
 
     if found_plate:
         log_to_json(detected_text_for_log)
-        if img.shape[1] > 1000:
-            scale = 1000 / img.shape[1]
-            img = cv2.resize(img, (0,0), fx=scale, fy=scale)
-        cv2.imshow("Live Feed", img)
-        cv2.waitKey(2000) 
+        
+        # --- ONLY SHOW GUI IF CONFIG SAYS SO ---
+        if config.SHOW_GUI:
+            if img.shape[1] > 1000:
+                scale = 1000 / img.shape[1]
+                img = cv2.resize(img, (0,0), fx=scale, fy=scale)
+            cv2.imshow("Live Feed", img)
+            cv2.waitKey(2000) 
     else:
         print(f"❌ No clear plate found in {filename}")
 
@@ -143,7 +148,6 @@ def process_image(model, reader, full_path, filename):
     except Exception as e:
         print(f"⚠️ Could not move file: {e}")
 
-# ... (imports remain the same) ...
 
 def main():
     model, reader = initialize_model()
