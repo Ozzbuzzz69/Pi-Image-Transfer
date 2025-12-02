@@ -47,19 +47,18 @@ def initialize_model():
 def log_to_json(plate_text):
     """
     Appends the detected plate to the log file in NDJSON format.
-    Format: {"timestamp": "...", "plate_number": "...", "status": "detected"}
+    Format: {"timestamp": "...", "plate": "..."}
     """
     data = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "plate_number": plate_text,
-        "status": "detected"
+        "plate": plate_text,
     }
     try:
         with open(config.LOG_FILE, mode='a', encoding='utf-8') as f:
             f.write(json.dumps(data) + "\n")
-        print(f"📝 Logged: {plate_text}")
+        print(f"Logged: {plate_text}")
     except Exception as e:
-        print(f"❌ Error logging: {e}")
+        print(f"Error logging: {e}")
 
 def wait_for_write_finish(filepath):
     """
