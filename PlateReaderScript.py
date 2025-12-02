@@ -24,6 +24,9 @@ import shutil
 import json
 from datetime import datetime
 
+# Import requests for sending data to rest API
+import requests
+
 # Import configuration from config.py
 import config
 
