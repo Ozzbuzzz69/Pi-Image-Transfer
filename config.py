@@ -24,6 +24,9 @@ WATCH_FOLDER = os.path.join(BASE_FOLDER, "received_images")
 # Archive folder: Where images are moved after successful processing
 PROCESSED_FOLDER = os.path.join(BASE_FOLDER, "processed_images")
 
+# Images where no plate was found go here
+UNIDENTIFIED_FOLDER = os.path.join(BASE_FOLDER, "unidentified_images")
+
 # Log file: The NDJSON text file where detection results are appended
 LOG_FILE = os.path.join(BASE_FOLDER, "plate_log.txt")
 
@@ -49,30 +52,30 @@ ALLOWED_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 
 # Percentage to crop from Left/Right to remove plate holders/frames
 # 0.06 = 6%. Removes "Phantom 1" errors caused by vertical frame edges.
-CROP_X_PERCENT = 0.06  
+CROP_X_PERCENT = 0.045
 
 # Percentage to crop from Top/Bottom
-CROP_Y_PERCENT = 0.02  
+CROP_Y_PERCENT = 0.011 
 
 # Scale factor to zoom image. 2.0 = 200%.
 # Larger text is easier for OCR to read.
-RESIZE_SCALE = 2.0     
+RESIZE_SCALE = 4.0     
 
 # Pixels of white border to add around the plate.
 # Prevents text touching the edge from being cut off.
-PADDING_SIZE = 30      
+PADDING_SIZE = 25      
 
 
 # =============================================================================
 # 4. LOGIC FILTERS
 # =============================================================================
 # Minimum confidence (0.0 to 1.0) for EasyOCR to accept a text block.
-MIN_CONFIDENCE = 0.3         
+MIN_CONFIDENCE = 0.2         
 
 # Geometry Filter: Rejects text that is too small compared to the main plate.
 # 0.6 means: "If text height is less than 60% of the tallest text, delete it."
 # This effectively removes Country Codes (e.g., small "DK") and dealer text.
-HEIGHT_RATIO_FILTER = 0.6
+HEIGHT_RATIO_FILTER = 0.4
 
 
 # =============================================================================
