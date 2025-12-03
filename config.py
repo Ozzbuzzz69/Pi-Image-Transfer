@@ -87,10 +87,10 @@ SHOW_GUI = True
 # 6. REST API CONFIGURATION
 # =============================================================================
 # Set to True to send detection results to a remote server/API.
-ENABLE_API = False  # <--- Set to True when you have a server ready
+ENABLE_API = True  # <--- Set to True when you have a server ready
 
 # The URL where the POST request will be sent
-API_URL = "http://YOUR_SERVER_IP:5000/api/plate"
+API_URL = "http://localhost:5166/api/parkwhere"
 
 # Optional Headers (Useful for Authorization tokens or Content-Type)
 API_HEADERS = {

@@ -55,7 +55,7 @@ def log_to_json(plate_data):
     """
     try:
         with open(config.LOG_FILE, mode='a', encoding='utf-8') as f:
-            f.write(json.dumps(plate_data) + "\n")
+            f.write(json.dumps(plate_data) + "\n\n")
         print(f"Logged to file: {plate_data['plate_number']}")
     except Exception as e:
         print(f"Error local logging: {e}")
@@ -189,18 +189,18 @@ def process_image(model, reader, full_path, filename):
 
             # 5. Validation
             if 5 <= len(plate_text) <= 9:
-                print(f"✅ PLATE: {plate_text}")
+                print(f"PLATE: {plate_text}")
                 found_plate = True
                 
                 # --- PREPARE DATA ---
-                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
+                current_time = datetime.now().isoformat(timespec='seconds')
                 # A. Detailed Data (For Local PC Log)
                 local_log_data = {
                     "timestamp": current_time,
                     "filename": filename,
                     "plate_number": plate_text,
                     "status": "detected"
+                    
                 }
 
                 # B. Simplified Data (For REST API)
@@ -230,14 +230,14 @@ def process_image(model, reader, full_path, filename):
             cv2.imshow("Live Feed", img)
             cv2.waitKey(2000) 
     else:
-        print(f"❌ No clear plate found in {filename}")
+        print(f"No clear plate found in {filename}")
 
     # 7. Cleanup
     try:
         shutil.move(full_path, os.path.join(config.PROCESSED_FOLDER, filename))
-        print(f"📂 Moved to processed folder.\n")
+        print(f"Moved to processed folder.\n")
     except Exception as e:
-        print(f"⚠️ Could not move file: {e}")
+        print(f"Could not move file: {e}")
 
 
 def main():
@@ -249,7 +249,7 @@ def main():
             
             for filename in files:
                 full_path = os.path.join(config.WATCH_FOLDER, filename)
-                print(f"\n📥 Processing: {filename}")
+                print(f"\nProcessing: {filename}")
                 
                 if wait_for_write_finish(full_path):
                     process_image(model, reader, full_path, filename)
