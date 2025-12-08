@@ -2,7 +2,7 @@
 ===============================================================================
 FILE: PlateReaderScript.py
 TITLE: Automated License Plate Recognition (ALPR) System
-AUTHOR: [Your Name]
+AUTHOR: [Ozzbuzzz69]
 DATE: 2025-12-08
 
 DESCRIPTION:
