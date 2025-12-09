@@ -43,7 +43,7 @@ SERVER_PORT = 8000
 # --- CAMERA SETTINGS ---
 TOTAL_IMAGES = 5         # How many photos to take per car
 INTERVAL = 0.2            # Time between photos (seconds)
-SHUTTER_SPEED = 2500      # Microseconds (2500us = 1/400th sec) - Freezes motion
+SHUTTER_SPEED = 4000      # Microseconds (2500us = 1/400th sec) - Freezes motion
 ANALOG_GAIN = 6.0         # Brightness gain (High ISO)
 
 # ==========================================
